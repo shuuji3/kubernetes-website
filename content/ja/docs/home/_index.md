@@ -16,7 +16,7 @@ menu:
     post: >
       <p>チュートリアル、サンプルやドキュメントのリファレンスを使って Kubernetes の利用方法を学んでください。あなたは<a href="/editdocs/" data-auto-burger-exclude>ドキュメントへコントリビュートをする</a>こともできます!</p>
 overview: >
-  Kubernetesは、コンテナ化されたアプリケーションの展開、スケーリング、また管理を自動化するためのオープンソースコンテナプラットフォームです。このオープンソースプロジェクトは、Cloud Native Computing Foundationによってホストされています（<a href="https://www.cncf.io/about">CNCF</a>）。
+  Kubernetesは、コンテナ化されたアプリケーションの展開、スケーリング、また管理を自動化するためのオープンソースコンテナプラットフォームです。このオープンソースプロジェクトは、Cloud Native Computing Foundation(<a href="https://www.cncf.io/about">CNCF</a>)によってホストされています。
 cards:
 - name: concepts
   title: "基本を理解する"
