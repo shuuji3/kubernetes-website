@@ -2,6 +2,7 @@
 title: Using Source IP
 content_type: tutorial
 min-kubernetes-server-version: v1.5
+mermaid: true
 ---
 
 <!-- overview -->
@@ -218,6 +219,12 @@ Visually:
  endpoint
 ```
 
+{{< mermaid >}}
+flowchart TB
+  C(client)
+  C --> N2(node 2) -- SNAT --> N1(node 1) --> E(endpoint)
+  E --> N1 -- SNAT --> N2 --> C
+{{</ mermaid >}}
 
 To avoid this, Kubernetes has a feature to
 [preserve the client source IP](/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip).
@@ -273,7 +280,13 @@ Visually:
  endpoint
 ```
 
-
+{{< mermaid >}}
+flowchart TB
+  C(client)
+  C --> N1(node 1) --> E(endpoint)
+  E --> N1 --> C
+  C --x N2(node 2)
+{{</ mermaid >}}
 
 ## Source IP for Services with `Type=LoadBalancer`
 
@@ -335,6 +348,17 @@ health check --->   node 1   node 2 <--- health check
                     | V
                  endpoint
 ```
+
+{{< mermaid >}}
+flowchart TB
+  C(client) --- LB(lb VIP)
+  LB --> N1(node 1) --> E(endpoint)
+  E --> N1 --> LB
+  N1(node 1) <-- H1(health check)
+  N1 -- 200 --> H1
+  N2(node 2) <-- H2(health check)
+  N2 -- 500 --> H2
+{{</ mermaid >}}
 
 You can test this by setting the annotation:
 
