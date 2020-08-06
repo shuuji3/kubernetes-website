@@ -63,36 +63,539 @@ mount each volume.
 
 Kubernetes supports several types of Volumes:
 
+* Kubernetes Native
+
+   * [configMap](#configmap)
+   * [downwardAPI](#downwardapi)
+   * [emptyDir](#emptydir)
+   * [gitRepo (deprecated)](#gitrepo)
+   * [hostPath](#hostpath)
+   * [persistentVolumeClaim](#persistentvolumeclaim)
+   * [local](#local)
+   * [projected](#projected)
+   * [secret](#secret)
+
+* Require Storage Providers
+
    * [awsElasticBlockStore](#awselasticblockstore)
    * [azureDisk](#azuredisk)
    * [azureFile](#azurefile)
    * [cephfs](#cephfs)
    * [cinder](#cinder)
-   * [configMap](#configmap)
    * [csi](#csi)
-   * [downwardAPI](#downwardapi)
-   * [emptyDir](#emptydir)
    * [fc (fibre channel)](#fc)
    * [flexVolume](#flexVolume)
    * [flocker](#flocker)
    * [gcePersistentDisk](#gcepersistentdisk)
-   * [gitRepo (deprecated)](#gitrepo)
    * [glusterfs](#glusterfs)
-   * [hostPath](#hostpath)
    * [iscsi](#iscsi)
-   * [local](#local)
    * [nfs](#nfs)
-   * [persistentVolumeClaim](#persistentvolumeclaim)
-   * [projected](#projected)
    * [portworxVolume](#portworxvolume)
    * [quobyte](#quobyte)
    * [rbd](#rbd)
    * [scaleIO](#scaleio)
-   * [secret](#secret)
    * [storageos](#storageos)
    * [vsphereVolume](#vspherevolume)
 
 We welcome additional contributions.
+
+## Kubernetes Native
+
+
+### configMap {#configmap}
+
+The [`configMap`](/docs/tasks/configure-pod-container/configure-pod-configmap/) resource
+provides a way to inject configuration data into Pods.
+The data stored in a `ConfigMap` object can be referenced in a volume of type
+`configMap` and then consumed by containerized applications running in a Pod.
+
+When referencing a `configMap` object, you can simply provide its name in the
+volume to reference it. You can also customize the path to use for a specific
+entry in the ConfigMap.
+For example, to mount the `log-config` ConfigMap onto a Pod called `configmap-pod`,
+you might use the YAML below:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-pod
+spec:
+  containers:
+    - name: test
+      image: busybox
+      volumeMounts:
+        - name: config-vol
+          mountPath: /etc/config
+  volumes:
+    - name: config-vol
+      configMap:
+        name: log-config
+        items:
+          - key: log_level
+            path: log_level
+```
+
+The `log-config` ConfigMap is mounted as a volume, and all contents stored in
+its `log_level` entry are mounted into the Pod at path "`/etc/config/log_level`".
+Note that this path is derived from the volume's `mountPath` and the `path`
+keyed with `log_level`.
+
+{{< caution >}}
+You must create a [ConfigMap](/docs/tasks/configure-pod-container/configure-pod-configmap/) before you can use it.
+{{< /caution >}}
+
+{{< note >}}
+A Container using a ConfigMap as a [subPath](#using-subpath) volume mount will not
+receive ConfigMap updates.
+{{< /note >}}
+
+{{< note >}}
+Text data is exposed as files using the UTF-8 character encoding. To use some other character encoding, use binaryData.
+{{< /note >}}
+
+
+### downwardAPI {#downwardapi}
+
+A `downwardAPI` volume is used to make downward API data available to applications.
+It mounts a directory and writes the requested data in plain text files.
+
+{{< note >}}
+A Container using Downward API as a [subPath](#using-subpath) volume mount will not
+receive Downward API updates.
+{{< /note >}}
+
+See the [`downwardAPI` volume example](/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/)  for more details.
+
+### emptyDir {#emptydir}
+
+An `emptyDir` volume is first created when a Pod is assigned to a Node, and
+exists as long as that Pod is running on that node.  As the name says, it is
+initially empty.  Containers in the Pod can all read and write the same
+files in the `emptyDir` volume, though that volume can be mounted at the same
+or different paths in each Container.  When a Pod is removed from a node for
+any reason, the data in the `emptyDir` is deleted forever.
+
+{{< note >}}
+A Container crashing does *NOT* remove a Pod from a node, so the data in an `emptyDir` volume is safe across Container crashes.
+{{< /note >}}
+
+Some uses for an `emptyDir` are:
+
+* scratch space, such as for a disk-based merge sort
+* checkpointing a long computation for recovery from crashes
+* holding files that a content-manager Container fetches while a webserver
+  Container serves the data
+
+By default, `emptyDir` volumes are stored on whatever medium is backing the
+node - that might be disk or SSD or network storage, depending on your
+environment.  However, you can set the `emptyDir.medium` field to `"Memory"`
+to tell Kubernetes to mount a tmpfs (RAM-backed filesystem) for you instead.
+While tmpfs is very fast, be aware that unlike disks, tmpfs is cleared on
+node reboot and any files you write will count against your Container's
+memory limit.
+
+#### Example Pod
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+  - image: k8s.gcr.io/test-webserver
+    name: test-container
+    volumeMounts:
+    - mountPath: /cache
+      name: cache-volume
+  volumes:
+  - name: cache-volume
+    emptyDir: {}
+```
+
+
+### gitRepo (deprecated) {#gitrepo}
+
+{{< warning >}}
+The gitRepo volume type is deprecated. To provision a container with a git repo, mount an [EmptyDir](#emptydir) into an InitContainer that clones the repo using git, then mount the [EmptyDir](#emptydir) into the Pod's container.
+{{< /warning >}}
+
+A `gitRepo` volume is an example of what can be done as a volume plugin.  It
+mounts an empty directory and clones a git repository into it for your Pod to
+use.  In the future, such volumes may be moved to an even more decoupled model,
+rather than extending the Kubernetes API for every such use case.
+
+Here is an example of gitRepo volume:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: server
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    volumeMounts:
+    - mountPath: /mypath
+      name: git-volume
+  volumes:
+  - name: git-volume
+    gitRepo:
+      repository: "git@somewhere:me/my-git-repository.git"
+      revision: "22f1d8406d464b0c0874075539c1f2e96c253775"
+```
+
+### hostPath {#hostpath}
+
+A `hostPath` volume mounts a file or directory from the host node's filesystem
+into your Pod. This is not something that most Pods will need, but it offers a
+powerful escape hatch for some applications.
+
+For example, some uses for a `hostPath` are:
+
+* running a Container that needs access to Docker internals; use a `hostPath`
+  of `/var/lib/docker`
+* running cAdvisor in a Container; use a `hostPath` of `/sys`
+* allowing a Pod to specify whether a given `hostPath` should exist prior to the
+  Pod running, whether it should be created, and what it should exist as
+
+In addition to the required `path` property, user can optionally specify a `type` for a `hostPath` volume.
+
+The supported values for field `type` are:
+
+
+| Value | Behavior |
+|:------|:---------|
+| | Empty string (default) is for backward compatibility, which means that no checks will be performed before mounting the hostPath volume. |
+| `DirectoryOrCreate` | If nothing exists at the given path, an empty directory will be created there as needed with permission set to 0755, having the same group and ownership with Kubelet. |
+| `Directory` | A directory must exist at the given path |
+| `FileOrCreate` | If nothing exists at the given path, an empty file will be created there as needed with permission set to 0644, having the same group and ownership with Kubelet. |
+| `File` | A file must exist at the given path |
+| `Socket` | A UNIX socket must exist at the given path |
+| `CharDevice` | A character device must exist at the given path |
+| `BlockDevice` | A block device must exist at the given path |
+
+Watch out when using this type of volume, because:
+
+* Pods with identical configuration (such as created from a podTemplate) may
+  behave differently on different nodes due to different files on the nodes
+* when Kubernetes adds resource-aware scheduling, as is planned, it will not be
+  able to account for resources used by a `hostPath`
+* the files or directories created on the underlying hosts are only writable by root. You
+  either need to run your process as root in a
+  [privileged Container](/docs/tasks/configure-pod-container/security-context/) or modify the file
+  permissions on the host to be able to write to a `hostPath` volume
+
+#### Example Pod
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+  - image: k8s.gcr.io/test-webserver
+    name: test-container
+    volumeMounts:
+    - mountPath: /test-pd
+      name: test-volume
+  volumes:
+  - name: test-volume
+    hostPath:
+      # directory location on host
+      path: /data
+      # this field is optional
+      type: Directory
+```
+
+{{< caution >}}
+It should be noted that the `FileOrCreate` mode does not create the parent directory of the file. If the parent directory of the mounted file does not exist, the pod fails to start. To ensure that this mode works, you can try to mount directories and files separately, as shown below.
+{{< /caution >}}
+
+#### Example Pod FileOrCreate
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-webserver
+spec:
+  containers:
+  - name: test-webserver
+    image: k8s.gcr.io/test-webserver:latest
+    volumeMounts:
+    - mountPath: /var/local/aaa
+      name: mydir
+    - mountPath: /var/local/aaa/1.txt
+      name: myfile
+  volumes:
+  - name: mydir
+    hostPath:
+      # Ensure the file directory is created.
+      path: /var/local/aaa
+      type: DirectoryOrCreate
+  - name: myfile
+    hostPath:
+      path: /var/local/aaa/1.txt
+      type: FileOrCreate
+```
+
+
+### local {#local}
+
+{{< feature-state for_k8s_version="v1.14" state="stable" >}}
+
+A `local` volume represents a mounted local storage device such as a disk,
+partition or directory.
+
+Local volumes can only be used as a statically created PersistentVolume. Dynamic
+provisioning is not supported yet.
+
+Compared to `hostPath` volumes, local volumes can be used in a durable and
+portable manner without manually scheduling Pods to nodes, as the system is aware
+of the volume's node constraints by looking at the node affinity on the PersistentVolume.
+
+However, local volumes are still subject to the availability of the underlying
+node and are not suitable for all applications. If a node becomes unhealthy,
+then the local volume will also become inaccessible, and a Pod using it will not
+be able to run. Applications using local volumes must be able to tolerate this
+reduced availability, as well as potential data loss, depending on the
+durability characteristics of the underlying disk.
+
+The following is an example of PersistentVolume spec using a `local` volume and
+`nodeAffinity`:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-pv
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local-storage
+  local:
+    path: /mnt/disks/ssd1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - example-node
+```
+
+PersistentVolume `nodeAffinity` is required when using local volumes. It enables
+the Kubernetes scheduler to correctly schedule Pods using local volumes to the
+correct node.
+
+PersistentVolume `volumeMode` can be set to "Block" (instead of the default
+value "Filesystem") to expose the local volume as a raw block device.
+
+When using local volumes, it is recommended to create a StorageClass with
+`volumeBindingMode` set to `WaitForFirstConsumer`. See the
+[example](/docs/concepts/storage/storage-classes/#local). Delaying volume binding ensures
+that the PersistentVolumeClaim binding decision will also be evaluated with any
+other node constraints the Pod may have, such as node resource requirements, node
+selectors, Pod affinity, and Pod anti-affinity.
+
+An external static provisioner can be run separately for improved management of
+the local volume lifecycle. Note that this provisioner does not support dynamic
+provisioning yet. For an example on how to run an external local provisioner,
+see the [local volume provisioner user
+guide](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner).
+
+{{< note >}}
+The local PersistentVolume requires manual cleanup and deletion by the
+user if the external static provisioner is not used to manage the volume
+lifecycle.
+{{< /note >}}
+
+### persistentVolumeClaim {#persistentvolumeclaim}
+
+A `persistentVolumeClaim` volume is used to mount a
+[PersistentVolume](/docs/concepts/storage/persistent-volumes/) into a Pod.  PersistentVolumes are a
+way for users to "claim" durable storage (such as a GCE PersistentDisk or an
+iSCSI volume) without knowing the details of the particular cloud environment.
+
+See the [PersistentVolumes example](/docs/concepts/storage/persistent-volumes/) for more
+details.
+
+### projected {#projected}
+
+A `projected` volume maps several existing volume sources into the same directory.
+
+Currently, the following types of volume sources can be projected:
+
+- [`secret`](#secret)
+- [`downwardAPI`](#downwardapi)
+- [`configMap`](#configmap)
+- `serviceAccountToken`
+
+All sources are required to be in the same namespace as the Pod. For more details,
+see the [all-in-one volume design document](https://github.com/kubernetes/community/blob/{{< param "githubbranch" >}}/contributors/design-proposals/node/all-in-one-volume.md).
+
+The projection of service account tokens is a feature introduced in Kubernetes
+1.11 and promoted to Beta in 1.12.
+To enable this feature on 1.11, you need to explicitly set the `TokenRequestProjection`
+[feature gate](/docs/reference/command-line-tools-reference/feature-gates/) to
+True.
+
+#### Example Pod with a secret, a downward API, and a configmap.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-test
+spec:
+  containers:
+  - name: container-test
+    image: busybox
+    volumeMounts:
+    - name: all-in-one
+      mountPath: "/projected-volume"
+      readOnly: true
+  volumes:
+  - name: all-in-one
+    projected:
+      sources:
+      - secret:
+          name: mysecret
+          items:
+            - key: username
+              path: my-group/my-username
+      - downwardAPI:
+          items:
+            - path: "labels"
+              fieldRef:
+                fieldPath: metadata.labels
+            - path: "cpu_limit"
+              resourceFieldRef:
+                containerName: container-test
+                resource: limits.cpu
+      - configMap:
+          name: myconfigmap
+          items:
+            - key: config
+              path: my-group/my-config
+```
+
+#### Example Pod with multiple secrets with a non-default permission mode set.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-test
+spec:
+  containers:
+  - name: container-test
+    image: busybox
+    volumeMounts:
+    - name: all-in-one
+      mountPath: "/projected-volume"
+      readOnly: true
+  volumes:
+  - name: all-in-one
+    projected:
+      sources:
+      - secret:
+          name: mysecret
+          items:
+            - key: username
+              path: my-group/my-username
+      - secret:
+          name: mysecret2
+          items:
+            - key: password
+              path: my-group/my-password
+              mode: 511
+```
+
+Each projected volume source is listed in the spec under `sources`. The
+parameters are nearly the same with two exceptions:
+
+* For secrets, the `secretName` field has been changed to `name` to be consistent
+  with ConfigMap naming.
+* The `defaultMode` can only be specified at the projected level and not for each
+  volume source. However, as illustrated above, you can explicitly set the `mode`
+  for each individual projection.
+
+When the `TokenRequestProjection` feature is enabled, you can inject the token
+for the current [service account](/docs/reference/access-authn-authz/authentication/#service-account-tokens)
+into a Pod at a specified path. Below is an example:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sa-token-test
+spec:
+  containers:
+  - name: container-test
+    image: busybox
+    volumeMounts:
+    - name: token-vol
+      mountPath: "/service-account"
+      readOnly: true
+  volumes:
+  - name: token-vol
+    projected:
+      sources:
+      - serviceAccountToken:
+          audience: api
+          expirationSeconds: 3600
+          path: token
+```
+
+The example Pod has a projected volume containing the injected service account
+token. This token can be used by Pod containers to access the Kubernetes API
+server, for example. The `audience` field contains the intended audience of the
+token. A recipient of the token must identify itself with an identifier specified
+in the audience of the token, and otherwise should reject the token. This field
+is optional and it defaults to the identifier of the API server.
+
+The `expirationSeconds` is the expected duration of validity of the service account
+token. It defaults to 1 hour and must be at least 10 minutes (600 seconds). An administrator
+can also limit its maximum value by specifying the `--service-account-max-token-expiration`
+option for the API server. The `path` field specifies a relative path to the mount point
+of the projected volume.
+
+{{< note >}}
+A Container using a projected volume source as a [subPath](#using-subpath) volume mount will not
+receive updates for those volume sources.
+{{< /note >}}
+
+
+### secret {#secret}
+
+A `secret` volume is used to pass sensitive information, such as passwords, to
+Pods.  You can store secrets in the Kubernetes API and mount them as files for
+use by Pods without coupling to Kubernetes directly.  `secret` volumes are
+backed by tmpfs (a RAM-backed filesystem) so they are never written to
+non-volatile storage.
+
+{{< caution >}}
+You must create a secret in the Kubernetes API before you can use it.
+{{< /caution >}}
+
+{{< note >}}
+A Container using a Secret as a [subPath](#using-subpath) volume mount will not
+receive Secret updates.
+{{< /note >}}
+
+Secrets are described in more detail [here](/docs/concepts/configuration/secret/).
+
+## Require External Storage Providers
 
 ### awsElasticBlockStore {#awselasticblockstore}
 
@@ -254,118 +757,6 @@ Driver](https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/
 must be installed on the cluster and the `CSIMigration` and `CSIMigrationOpenStack`
 Beta features must be enabled.
 
-### configMap {#configmap}
-
-The [`configMap`](/docs/tasks/configure-pod-container/configure-pod-configmap/) resource
-provides a way to inject configuration data into Pods.
-The data stored in a `ConfigMap` object can be referenced in a volume of type
-`configMap` and then consumed by containerized applications running in a Pod.
-
-When referencing a `configMap` object, you can simply provide its name in the
-volume to reference it. You can also customize the path to use for a specific
-entry in the ConfigMap.
-For example, to mount the `log-config` ConfigMap onto a Pod called `configmap-pod`,
-you might use the YAML below:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: configmap-pod
-spec:
-  containers:
-    - name: test
-      image: busybox
-      volumeMounts:
-        - name: config-vol
-          mountPath: /etc/config
-  volumes:
-    - name: config-vol
-      configMap:
-        name: log-config
-        items:
-          - key: log_level
-            path: log_level
-```
-
-The `log-config` ConfigMap is mounted as a volume, and all contents stored in
-its `log_level` entry are mounted into the Pod at path "`/etc/config/log_level`".
-Note that this path is derived from the volume's `mountPath` and the `path`
-keyed with `log_level`.
-
-{{< caution >}}
-You must create a [ConfigMap](/docs/tasks/configure-pod-container/configure-pod-configmap/) before you can use it.
-{{< /caution >}}
-
-{{< note >}}
-A Container using a ConfigMap as a [subPath](#using-subpath) volume mount will not
-receive ConfigMap updates.
-{{< /note >}}
-
-{{< note >}}
-Text data is exposed as files using the UTF-8 character encoding. To use some other character encoding, use binaryData.
-{{< /note >}}
-
-
-### downwardAPI {#downwardapi}
-
-A `downwardAPI` volume is used to make downward API data available to applications.
-It mounts a directory and writes the requested data in plain text files.
-
-{{< note >}}
-A Container using Downward API as a [subPath](#using-subpath) volume mount will not
-receive Downward API updates.
-{{< /note >}}
-
-See the [`downwardAPI` volume example](/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/)  for more details.
-
-### emptyDir {#emptydir}
-
-An `emptyDir` volume is first created when a Pod is assigned to a Node, and
-exists as long as that Pod is running on that node.  As the name says, it is
-initially empty.  Containers in the Pod can all read and write the same
-files in the `emptyDir` volume, though that volume can be mounted at the same
-or different paths in each Container.  When a Pod is removed from a node for
-any reason, the data in the `emptyDir` is deleted forever.
-
-{{< note >}}
-A Container crashing does *NOT* remove a Pod from a node, so the data in an `emptyDir` volume is safe across Container crashes.
-{{< /note >}}
-
-Some uses for an `emptyDir` are:
-
-* scratch space, such as for a disk-based merge sort
-* checkpointing a long computation for recovery from crashes
-* holding files that a content-manager Container fetches while a webserver
-  Container serves the data
-
-By default, `emptyDir` volumes are stored on whatever medium is backing the
-node - that might be disk or SSD or network storage, depending on your
-environment.  However, you can set the `emptyDir.medium` field to `"Memory"`
-to tell Kubernetes to mount a tmpfs (RAM-backed filesystem) for you instead.
-While tmpfs is very fast, be aware that unlike disks, tmpfs is cleared on
-node reboot and any files you write will count against your Container's
-memory limit.
-
-#### Example Pod
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-pd
-spec:
-  containers:
-  - image: k8s.gcr.io/test-webserver
-    name: test-container
-    volumeMounts:
-    - mountPath: /cache
-      name: cache-volume
-  volumes:
-  - name: cache-volume
-    emptyDir: {}
-```
-
 ### fc (fibre channel) {#fc}
 
 An `fc` volume allows an existing fibre channel volume to be mounted in a Pod.
@@ -500,38 +891,6 @@ Driver](https://github.com/kubernetes-sigs/gcp-compute-persistent-disk-csi-drive
 must be installed on the cluster and the `CSIMigration` and `CSIMigrationGCE`
 Beta features must be enabled.
 
-### gitRepo (deprecated) {#gitrepo}
-
-{{< warning >}}
-The gitRepo volume type is deprecated. To provision a container with a git repo, mount an [EmptyDir](#emptydir) into an InitContainer that clones the repo using git, then mount the [EmptyDir](#emptydir) into the Pod's container.
-{{< /warning >}}
-
-A `gitRepo` volume is an example of what can be done as a volume plugin.  It
-mounts an empty directory and clones a git repository into it for your Pod to
-use.  In the future, such volumes may be moved to an even more decoupled model,
-rather than extending the Kubernetes API for every such use case.
-
-Here is an example of gitRepo volume:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: server
-spec:
-  containers:
-  - image: nginx
-    name: nginx
-    volumeMounts:
-    - mountPath: /mypath
-      name: git-volume
-  volumes:
-  - name: git-volume
-    gitRepo:
-      repository: "git@somewhere:me/my-git-repository.git"
-      revision: "22f1d8406d464b0c0874075539c1f2e96c253775"
-```
-
 ### glusterfs {#glusterfs}
 
 A `glusterfs` volume allows a [Glusterfs](https://www.gluster.org) (an open
@@ -547,102 +906,6 @@ You must have your own GlusterFS installation running before you can use it.
 {{< /caution >}}
 
 See the [GlusterFS example](https://github.com/kubernetes/examples/tree/{{< param "githubbranch" >}}/volumes/glusterfs) for more details.
-
-### hostPath {#hostpath}
-
-A `hostPath` volume mounts a file or directory from the host node's filesystem
-into your Pod. This is not something that most Pods will need, but it offers a
-powerful escape hatch for some applications.
-
-For example, some uses for a `hostPath` are:
-
-* running a Container that needs access to Docker internals; use a `hostPath`
-  of `/var/lib/docker`
-* running cAdvisor in a Container; use a `hostPath` of `/sys`
-* allowing a Pod to specify whether a given `hostPath` should exist prior to the
-  Pod running, whether it should be created, and what it should exist as
-
-In addition to the required `path` property, user can optionally specify a `type` for a `hostPath` volume.
-
-The supported values for field `type` are:
-
-
-| Value | Behavior |
-|:------|:---------|
-| | Empty string (default) is for backward compatibility, which means that no checks will be performed before mounting the hostPath volume. |
-| `DirectoryOrCreate` | If nothing exists at the given path, an empty directory will be created there as needed with permission set to 0755, having the same group and ownership with Kubelet. |
-| `Directory` | A directory must exist at the given path |
-| `FileOrCreate` | If nothing exists at the given path, an empty file will be created there as needed with permission set to 0644, having the same group and ownership with Kubelet. |
-| `File` | A file must exist at the given path |
-| `Socket` | A UNIX socket must exist at the given path |
-| `CharDevice` | A character device must exist at the given path |
-| `BlockDevice` | A block device must exist at the given path |
-
-Watch out when using this type of volume, because:
-
-* Pods with identical configuration (such as created from a podTemplate) may
-  behave differently on different nodes due to different files on the nodes
-* when Kubernetes adds resource-aware scheduling, as is planned, it will not be
-  able to account for resources used by a `hostPath`
-* the files or directories created on the underlying hosts are only writable by root. You
-  either need to run your process as root in a
-  [privileged Container](/docs/tasks/configure-pod-container/security-context/) or modify the file
-  permissions on the host to be able to write to a `hostPath` volume
-
-#### Example Pod
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-pd
-spec:
-  containers:
-  - image: k8s.gcr.io/test-webserver
-    name: test-container
-    volumeMounts:
-    - mountPath: /test-pd
-      name: test-volume
-  volumes:
-  - name: test-volume
-    hostPath:
-      # directory location on host
-      path: /data
-      # this field is optional
-      type: Directory
-```
-
-{{< caution >}}
-It should be noted that the `FileOrCreate` mode does not create the parent directory of the file. If the parent directory of the mounted file does not exist, the pod fails to start. To ensure that this mode works, you can try to mount directories and files separately, as shown below.
-{{< /caution >}}
-
-#### Example Pod FileOrCreate
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-webserver
-spec:
-  containers:
-  - name: test-webserver
-    image: k8s.gcr.io/test-webserver:latest
-    volumeMounts:
-    - mountPath: /var/local/aaa
-      name: mydir
-    - mountPath: /var/local/aaa/1.txt
-      name: myfile
-  volumes:
-  - name: mydir
-    hostPath:
-      # Ensure the file directory is created.
-      path: /var/local/aaa
-      type: DirectoryOrCreate
-  - name: myfile
-    hostPath:
-      path: /var/local/aaa/1.txt
-      type: FileOrCreate
-```
 
 ### iscsi {#iscsi}
 
@@ -664,81 +927,6 @@ simultaneous writers allowed.
 
 See the [iSCSI example](https://github.com/kubernetes/examples/tree/{{< param "githubbranch" >}}/volumes/iscsi) for more details.
 
-### local {#local}
-
-{{< feature-state for_k8s_version="v1.14" state="stable" >}}
-
-A `local` volume represents a mounted local storage device such as a disk,
-partition or directory.
-
-Local volumes can only be used as a statically created PersistentVolume. Dynamic
-provisioning is not supported yet.
-
-Compared to `hostPath` volumes, local volumes can be used in a durable and
-portable manner without manually scheduling Pods to nodes, as the system is aware
-of the volume's node constraints by looking at the node affinity on the PersistentVolume.
-
-However, local volumes are still subject to the availability of the underlying
-node and are not suitable for all applications. If a node becomes unhealthy,
-then the local volume will also become inaccessible, and a Pod using it will not
-be able to run. Applications using local volumes must be able to tolerate this
-reduced availability, as well as potential data loss, depending on the
-durability characteristics of the underlying disk.
-
-The following is an example of PersistentVolume spec using a `local` volume and
-`nodeAffinity`:
-
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: example-pv
-spec:
-  capacity:
-    storage: 100Gi
-  volumeMode: Filesystem
-  accessModes:
-  - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Delete
-  storageClassName: local-storage
-  local:
-    path: /mnt/disks/ssd1
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - example-node
-```
-
-PersistentVolume `nodeAffinity` is required when using local volumes. It enables
-the Kubernetes scheduler to correctly schedule Pods using local volumes to the
-correct node.
-
-PersistentVolume `volumeMode` can be set to "Block" (instead of the default
-value "Filesystem") to expose the local volume as a raw block device.
-
-When using local volumes, it is recommended to create a StorageClass with
-`volumeBindingMode` set to `WaitForFirstConsumer`. See the
-[example](/docs/concepts/storage/storage-classes/#local). Delaying volume binding ensures
-that the PersistentVolumeClaim binding decision will also be evaluated with any
-other node constraints the Pod may have, such as node resource requirements, node
-selectors, Pod affinity, and Pod anti-affinity.
-
-An external static provisioner can be run separately for improved management of
-the local volume lifecycle. Note that this provisioner does not support dynamic
-provisioning yet. For an example on how to run an external local provisioner,
-see the [local volume provisioner user
-guide](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner).
-
-{{< note >}}
-The local PersistentVolume requires manual cleanup and deletion by the
-user if the external static provisioner is not used to manage the volume
-lifecycle.
-{{< /note >}}
-
 ### nfs {#nfs}
 
 An `nfs` volume allows an existing NFS (Network File System) share to be
@@ -753,162 +941,6 @@ You must have your own NFS server running with the share exported before you can
 {{< /caution >}}
 
 See the [NFS example](https://github.com/kubernetes/examples/tree/{{< param "githubbranch" >}}/staging/volumes/nfs) for more details.
-
-### persistentVolumeClaim {#persistentvolumeclaim}
-
-A `persistentVolumeClaim` volume is used to mount a
-[PersistentVolume](/docs/concepts/storage/persistent-volumes/) into a Pod.  PersistentVolumes are a
-way for users to "claim" durable storage (such as a GCE PersistentDisk or an
-iSCSI volume) without knowing the details of the particular cloud environment.
-
-See the [PersistentVolumes example](/docs/concepts/storage/persistent-volumes/) for more
-details.
-
-### projected {#projected}
-
-A `projected` volume maps several existing volume sources into the same directory.
-
-Currently, the following types of volume sources can be projected:
-
-- [`secret`](#secret)
-- [`downwardAPI`](#downwardapi)
-- [`configMap`](#configmap)
-- `serviceAccountToken`
-
-All sources are required to be in the same namespace as the Pod. For more details,
-see the [all-in-one volume design document](https://github.com/kubernetes/community/blob/{{< param "githubbranch" >}}/contributors/design-proposals/node/all-in-one-volume.md).
-
-The projection of service account tokens is a feature introduced in Kubernetes
-1.11 and promoted to Beta in 1.12.
-To enable this feature on 1.11, you need to explicitly set the `TokenRequestProjection`
-[feature gate](/docs/reference/command-line-tools-reference/feature-gates/) to
-True.
-
-#### Example Pod with a secret, a downward API, and a configmap.
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: volume-test
-spec:
-  containers:
-  - name: container-test
-    image: busybox
-    volumeMounts:
-    - name: all-in-one
-      mountPath: "/projected-volume"
-      readOnly: true
-  volumes:
-  - name: all-in-one
-    projected:
-      sources:
-      - secret:
-          name: mysecret
-          items:
-            - key: username
-              path: my-group/my-username
-      - downwardAPI:
-          items:
-            - path: "labels"
-              fieldRef:
-                fieldPath: metadata.labels
-            - path: "cpu_limit"
-              resourceFieldRef:
-                containerName: container-test
-                resource: limits.cpu
-      - configMap:
-          name: myconfigmap
-          items:
-            - key: config
-              path: my-group/my-config
-```
-
-#### Example Pod with multiple secrets with a non-default permission mode set.
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: volume-test
-spec:
-  containers:
-  - name: container-test
-    image: busybox
-    volumeMounts:
-    - name: all-in-one
-      mountPath: "/projected-volume"
-      readOnly: true
-  volumes:
-  - name: all-in-one
-    projected:
-      sources:
-      - secret:
-          name: mysecret
-          items:
-            - key: username
-              path: my-group/my-username
-      - secret:
-          name: mysecret2
-          items:
-            - key: password
-              path: my-group/my-password
-              mode: 511
-```
-
-Each projected volume source is listed in the spec under `sources`. The
-parameters are nearly the same with two exceptions:
-
-* For secrets, the `secretName` field has been changed to `name` to be consistent
-  with ConfigMap naming.
-* The `defaultMode` can only be specified at the projected level and not for each
-  volume source. However, as illustrated above, you can explicitly set the `mode`
-  for each individual projection.
-
-When the `TokenRequestProjection` feature is enabled, you can inject the token
-for the current [service account](/docs/reference/access-authn-authz/authentication/#service-account-tokens)
-into a Pod at a specified path. Below is an example:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: sa-token-test
-spec:
-  containers:
-  - name: container-test
-    image: busybox
-    volumeMounts:
-    - name: token-vol
-      mountPath: "/service-account"
-      readOnly: true
-  volumes:
-  - name: token-vol
-    projected:
-      sources:
-      - serviceAccountToken:
-          audience: api
-          expirationSeconds: 3600
-          path: token
-```
-
-The example Pod has a projected volume containing the injected service account
-token. This token can be used by Pod containers to access the Kubernetes API
-server, for example. The `audience` field contains the intended audience of the
-token. A recipient of the token must identify itself with an identifier specified
-in the audience of the token, and otherwise should reject the token. This field
-is optional and it defaults to the identifier of the API server.
-
-The `expirationSeconds` is the expected duration of validity of the service account
-token. It defaults to 1 hour and must be at least 10 minutes (600 seconds). An administrator
-can also limit its maximum value by specifying the `--service-account-max-token-expiration`
-option for the API server. The `path` field specifies a relative path to the mount point
-of the projected volume.
-
-{{< note >}}
-A Container using a projected volume source as a [subPath](#using-subpath) volume mount will not
-receive updates for those volume sources.
-{{< /note >}}
 
 ### portworxVolume {#portworxvolume}
 
@@ -1023,25 +1055,6 @@ spec:
 ```
 
 For further detail, please see the [ScaleIO examples](https://github.com/kubernetes/examples/tree/{{< param "githubbranch" >}}/staging/volumes/scaleio).
-
-### secret {#secret}
-
-A `secret` volume is used to pass sensitive information, such as passwords, to
-Pods.  You can store secrets in the Kubernetes API and mount them as files for
-use by Pods without coupling to Kubernetes directly.  `secret` volumes are
-backed by tmpfs (a RAM-backed filesystem) so they are never written to
-non-volatile storage.
-
-{{< caution >}}
-You must create a secret in the Kubernetes API before you can use it.
-{{< /caution >}}
-
-{{< note >}}
-A Container using a Secret as a [subPath](#using-subpath) volume mount will not
-receive Secret updates.
-{{< /note >}}
-
-Secrets are described in more detail [here](/docs/concepts/configuration/secret/).
 
 ### storageOS {#storageos}
 
