@@ -185,6 +185,7 @@ Home | [All heading and subheading URLs](/docs/home/)
 Setup | [All heading and subheading URLs](/docs/setup/)
 Tutorials | [Kubernetes Basics](/docs/tutorials/kubernetes-basics/), [Hello Minikube](/docs/tutorials/hello-minikube/)
 Site strings | [All site strings in a new localized TOML file](https://github.com/kubernetes/website/tree/master/i18n)
+Search result | [Page title](/docs/search/)
 
 Translated documents must reside in their own `content/**/` subdirectory, but otherwise follow the same URL path as the English source. For example, to prepare the [Kubernetes Basics](/docs/tutorials/kubernetes-basics/) tutorial for translation into German, create a subfolder under the `content/de/` folder and copy the English source:
 

@@ -14,16 +14,19 @@ limitations under the License.
 (function ($) {
   "use strict";
 
-  var Search = {
+  const Search = {
     init: function () {
       $(document).ready(function () {
+        // Set a keydown event
         $(document).on("keypress", ".td-search-input", function (e) {
           if (e.keyCode !== 13) {
             return;
           }
 
-          var query = $(this).val();
-          var searchPage = "{{ "docs/search/" | absURL }}?q=" + query;
+          const query = $(this).val();
+          const lang = document.querySelector('html').getAttribute('lang');
+          const prependPath = lang === 'en' ? '' : '/' + lang;
+          const searchPage = prependPath + "{{ "docs/search/" | relLangURL }}?q=" + query;
           document.location = searchPage;
 
           return false;
