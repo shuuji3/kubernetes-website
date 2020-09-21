@@ -29,13 +29,28 @@ For clarity, this guide defines the following terms:
 {{< link text="services" url="/docs/concepts/services-networking/service/" >}} within the cluster.
 Traffic routing is controlled by rules defined on the Ingress resource.
 
-```none
-    internet
-        |
-   [ Ingress ]
-   --|-----|--
-   [ Services ]
-```
+{{<mermaid>}}
+graph LR
+    Internet --> ingress{Ingress}
+    subgraph cluster
+        ingress
+        ingress --> svcA
+        ingress --> svcB
+        subgraph " "
+            svcB((ServiceB))
+        end
+        subgraph " "
+            svcA((ServiceA))
+        end
+    end
+
+    classDef plain fill:#ddd,stroke:#fff,stroke-width:4px,color:#000;
+    classDef k8s fill:#326ce5,stroke:#fff,stroke-width:4px,color:#fff;
+    classDef cluster fill:#fff,stroke:#bbb,stroke-width:2px,color:#326ce5;
+    class ingress,svcA,svcB k8s;
+    class Internet plain;
+    class cluster cluster;
+{{< /mermaid >}}
 
 An Ingress may be configured to give Services externally-reachable URLs, load balance traffic, terminate SSL / TLS, and offer name-based virtual hosting. An [Ingress controller](/docs/concepts/services-networking/ingress-controllers) is responsible for fulfilling the Ingress, usually with a load balancer, though it may also configure your edge router or additional frontends to help handle the traffic.
 
@@ -274,10 +289,28 @@ A fanout configuration routes traffic from a single IP address to more than one 
 based on the HTTP URI being requested. An Ingress allows you to keep the number of load balancers
 down to a minimum. For example, a setup like:
 
-```
-foo.bar.com -> 178.91.123.132 -> / foo    service1:4200
-                                 / bar    service2:8080
-```
+{{<mermaid>}}
+graph LR
+    foo(foo.bar.com) --> ip{178.91.123.132}
+    subgraph cluster
+        ip
+        ip -- /foo --> svc1
+        ip -- /bar --> svc2
+        subgraph " "
+            svc2((service2:8080))
+        end
+        subgraph " "
+            svc1((service1:4200))
+        end
+    end
+
+    classDef plain fill:#ddd,stroke:#fff,stroke-width:4px,color:#000;
+    classDef k8s fill:#326ce5,stroke:#fff,stroke-width:4px,color:#fff;
+    classDef cluster fill:#fff,stroke:#bbb,stroke-width:2px,color:#326ce5;
+    class ip,svc1,svc2 k8s;
+    class foo plain;
+    class cluster cluster;
+{{< /mermaid >}}
 
 would require an Ingress such as:
 
@@ -321,11 +354,29 @@ you are using, you may need to create a default-http-backend
 
 Name-based virtual hosts support routing HTTP traffic to multiple host names at the same IP address.
 
-```none
-foo.bar.com --|                 |-> foo.bar.com service1:80
-              | 178.91.123.132  |
-bar.foo.com --|                 |-> bar.foo.com service2:80
-```
+{{<mermaid>}}
+graph LR
+    foo(foo.bar.com) --> ip{178.91.123.132}
+    bar(bar.foo.com) --> ip
+    subgraph cluster
+        ip
+        ip -- foo.bar.com --> svc1
+        ip -- bar.foo.com --> svc2
+        subgraph " "
+            svc2((service2:80))
+        end
+        subgraph " "
+            svc1((service1:80))
+        end
+    end
+
+    classDef plain fill:#ddd,stroke:#fff,stroke-width:4px,color:#000;
+    classDef k8s fill:#326ce5,stroke:#fff,stroke-width:4px,color:#fff;
+    classDef cluster fill:#fff,stroke:#bbb,stroke-width:2px,color:#326ce5;
+    class ip,svc1,svc2 k8s;
+    class foo,bar plain;
+    class cluster cluster;
+{{< /mermaid >}}
 
 The following Ingress tells the backing load balancer to route requests based on
 the [Host header](https://tools.ietf.org/html/rfc7230#section-5.4).
