@@ -1,0 +1,4 @@
+image:
+  file: Dockerfile
+tasks:
+  - init: hugo server --buildFuture --bind 0.0.0.0
