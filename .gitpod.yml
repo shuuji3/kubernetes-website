@@ -1,0 +1,5 @@
+image:
+  file: .gitpod.Dockerfile
+tasks:
+  - init: git submodule update --init --recursive --depth 1
+    command: ./hugo server --buildFuture --bind 0.0.0.0
