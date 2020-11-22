@@ -2,8 +2,13 @@ FROM gitpod/workspace-full
 
 USER gitpod
 
+<<<<<<< HEAD
 RUN grep ^HUGO_VERSION netlify.toml | tail -n 1 | cut -d '=' -f 2 | tr -d " \"\n" > HUGO_VERSION && \
     curl -L https://github.com/gohugoio/hugo/releases/download/v$(cat HUGO_VERSION)/hugo_extended_$(cat HUGO_VERSION)_Linux-64bit.tar.gz | tar -xz
+=======
+RUN HUGO_VERSION=$(grep ^HUGO_VERSION netlify.toml | tail -n 1 | cut -d '=' -f 2 | tr -d " \"\n") && \
+    curl -L https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_Linux-64bit.tar.gz | tar -xz
+>>>>>>> 4135f017afa2c1907cda0f995589fd62484aeb5f
 
 EXPOSE 1313
 # Install custom tools, runtime, etc. using apt-get
