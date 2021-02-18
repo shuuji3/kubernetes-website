@@ -1,9 +1,9 @@
 tasks:
-  - command: sudo docker-up
   - command: |
       git submodule update --init --recursive --depth 1
+      while [[ $(docker info > /dev/null; echo $?) != 0 ]]; do
+          sleep 1
+      done
       make container-image
       make container-serve
-#      export HUGO_VERSION=$(grep ^HUGO_VERSION netlify.toml | tail -n 1 | cut -d '=' -f 2 | tr -d " \"\n")
-#      curl -L https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_Linux-64bit.tar.gz | tar -xz
-#      ./hugo server --buildFuture --bind 0.0.0.0
+  - command: sudo docker-up
