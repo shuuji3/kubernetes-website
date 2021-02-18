@@ -1,6 +1,6 @@
 tasks:
+  - command: sudo docker-up
   - command: |
-      sudo docker-up
       git submodule update --init --recursive --depth 1
       make container-build
       make container-serve
